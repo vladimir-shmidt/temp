@@ -1,0 +1,18 @@
+# Поставка согласований
+
+Необходимо обновить версию оператора до  ext-registry.sfera.ru.net/library/operator/image:1.64.7-gpn-19
+
+Внести необходимые данные в файл ppap.yaml
+Создать базу данных ppap
+В базе данных ppap  создать схему sfera_approvals_api_service
+Включить для БД ppap Extension:
+- btree_gin
+- pg_trgm
+Для регистрации согласований в канальном приложении необходимо выполнить скрипты на базе tenant:
+
+INSERT INTO "public"."subo_config" ("url", "title", "description", "group_title", "icon", "favorite", "enabled", "code") VALUES ('approvals', 'Согласования', 'Approvals', 'Производство', 'app/approvals/logo.svg', 't', 't', 'approvals');
+INSERT INTO "public"."route_config" ("code", "title", "is_public", "options", "icon", "path", "internal", "enabled") VALUES ('approvals', 'Согласования', 'f', '{"type": "script", "remoteName": "sfera_approvals_ui_container", "remoteEntry": "app/approvals/remoteEntry.js", "exposedModule": "microFrontend"}', 'app/approvals/logo.svg', 'approvals', 'f', 't');
+INSERT INTO "public"."gateway_route_config" ("code", "api_route", "mf_route", "widget_api_route", "widget_mf_route", "ws_route", "file_route") VALUES ('approvals', '{"url": "http://ppap-approvals-gateway:8000", "filters": ["StripPrefix=3"], "predicates": ["/app/approvals/**"]}', '{"url": "http://ppap-approvals-ui:8000", "filters": ["StripPrefix=2"], "predicates": ["/app/approvals/**"]}', NULL, NULL, NULL, NULL);
+
+
+В S3 создать bucket -ppap 
