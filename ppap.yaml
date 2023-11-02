@@ -1,0 +1,45 @@
+apiVersion: demo.t1.spb.ru/v1
+kind: PPAP
+metadata:
+  name: sfera-ppap
+spec:
+  database:
+    host: pgserver.local
+    port: 5432
+    user: sfera
+    password: secretpassword
+  s3:
+    url: http://minio:9000
+    key: accesskey
+    secret: secretkey
+    enabled: true
+  kafka:
+    servers: kafka-host:9092
+  ldap:
+    base: OU=Users,DC=example,DC=com
+    url: ldap://ldaphost.example.com:389
+    name: svc_sfera
+    password: secretpassword
+    domain: example.com
+
+  trustStore:
+    hostPath: /opt/t1.demo.ru.cacerts
+    password: changeit
+
+  ui:
+    image:
+      repository: ext-registry.sfera.ru.net/ppar-docker-snapshot/sfera-approvals-ui
+      tag: 274-release-2.6.0
+  gateway:
+    image:
+      repository: ext-registry.sfera.ru.net/ppar-docker-snapshot/sfera-approvals-gateway
+      tag: 36-release-1.0.1
+  api:
+    image:
+      repository: ext-registry.sfera.ru.net/ppar-docker-snapshot/sfera-approvals-api-service
+      tag: 425-release-2.6.0
+  notification:
+    enabled: false
+    image:
+      repository: ext-registry.sfera.ru.net/ppar-docker-snapshot/sfera-approvals-notification-service
+      tag: 12-develop
