@@ -1,0 +1,506 @@
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+1
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом
+«Сфера: Согласования»
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+2
+Содержание
+1. ОБЩИЕ СВЕДЕНИЯ ................................................................................................................... 3
+2. НАСТРОЙКА ИНТЕГРАЦИИ ..................................................................................................... 4
+2.1. Общее описание ................................................................................................................................. 4
+2.2. Добавление пользователя ................................................................................................................. 4
+2.3. Настройка конфигурации задачи с согласованием ....................................................................... 6
+2.3.1. Добавление пользовательского поля approvalId .............................................................................................. 6
+2.3.2. Настройка конфигурации карточки .................................................................................................................... 7
+2.3.3. Настройка статусной модели задачи ................................................................................................................. 9
+2.4. Настройка сервиса sfera-tasks-tasks............................................................................................... 13
+2.4.1. Переменные окружения ...................................................................................................................................... 13
+2.4.2. Конфигурация параметров интеграции ........................................................................................................... 14
+ИСТОРИЯ ПУБЛИКАЦИИ ДОКУМЕНТА ........................................................................................ 16
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+3
+1. Общие сведения
+Данное руководство является частью эксплуатационной документации для программного продукта
+«Сфера: Задачи».
+Руководство содержит описание настройки интеграции с продуктом «Сфера: Согласования».
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+4
+2. Настройка интеграции
+2.1. Общее описание
+Интеграция с продуктом «Сфера: Согласования» обеспечивает возможность согласования задач
+продукта «Сфера: Задачи» с использованием встроенного в UI продукта виджета. Виджет реализует
+следующие функции:
+1. Отображение виджета.
+2. Определение и выбор параметров согласования в виджете.
+3. Выбор согласующих в виджете.
+4. Отправка задачи на согласование.
+5. Согласование задачи.
+6. Не согласование задачи.
+7. Отзыв согласования задачи.
+Рис. 2-1 – Модель взаимодействия
+2.2. Добавление пользователя
+В рамках интеграции при обработке сообщений, полученных из Kafka продукта «Сфера:
+Согласования», осуществляются вызовы API Задач. Для вызова этих API требуется добавить
+пользователя с ролью «Администратор пространства» и доступом к пространству, в котором
+создаются задачи с согласованием.
+Рекомендуется использовать техническую учетную запись.
+Ниже в примере:
+• TEST – пространство, к которому проверяется доступ
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+5
+• approval-integration@corp.ru – техническая учетная запись, используемая в интеграции.
+• areaAdmin –код роли «Администратор пространства»
+Проверить наличие атрибута
+SELECT * FROM tasks.users u
+WHERE u.login = 'approval-integration@corp.ru';
+Проверить наличие роли «Администратор пространства» с доступом к пространству
+SELECT *
+FROM tasks.security_assigned_objects sao
+JOIN tasks.security_object_types sot ON sot.id = sao.object_type_id
+JOIN tasks.security_subject_roles ssr ON ssr.id = sao.subject_role_id
+JOIN tasks.security_roles sr ON sr.id = ssr.role_id
+WHERE sot.code = 'area'
+AND sao.code = 'TEST'
+AND ssr.subject_login = 'approval-integration@corp.ru'
+AND sr."name" = 'areaAdmin'
+При отсутствии добавить:
+Действие Пример запроса
+Добавление
+локальной
+роли
+«Администрат
+ор
+пространства»
+для одного
+пространства
+SET search_path TO tasks;
+do
+$$
+declare
+area_code text = 'TEST';
+area_name text =
+'Пространство TEST';
+area_id integer;
+tech_users TEXT[] := '{approval-integration@corp.ru}'::text[];
+subject_role_id BIGINT;
+user_login TEXT;
+member_role_id INT := (SELECT id
+FROM tasks.security_roles
+WHERE name = 'areaAdmin');
+area_object_type_id INT := (SELECT id
+FROM tasks.security_object_types
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+6
+Действие Пример запроса
+WHERE code = 'area');
+begin
+SELECT id FROM tasks.areas WHERE code = area_code INTO area_id;
+FOREACH user_login IN ARRAY tech_users
+LOOP
+subject_role_id := (SELECT id
+FROM security_subject_roles
+WHERE subject_login = user_login
+AND role_id = member_role_id);
+INSERT INTO tasks.security_assigned_objects (subject_role_id,
+object_type_id, code, name)
+VALUES (subject_role_id, area_object_type_id, area_code, area_name);
+END LOOP;
+end;
+$$;
+2.3. Настройка конфигурации задачи с согласованием
+Для задачи выбранного типа (типа, для которого требуется использовать механизм согласования)
+должны быть настроены:
+• Статусная модель
+• Конфигурация карточки
+2.3.1. Добавление пользовательского поля approvalId
+В списке пользовательских атрибутов должен присутствовать атрибут approvalId.
+Проверить наличие атрибута
+SELECT * FROM tasks.custom_fields cf
+WHERE cf.code = 'approvalId';
+Проверить связь атрибута с типом задачи “Эпик”
+SELECT *
+FROM tasks.custom_fields_entity_types cfet
+WHERE cfet.custom_field_id =
+(SELECT cf.id FROM tasks.custom_fields cf
+WHERE cf.code = 'systems')
+AND
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+7
+Проверить связь атрибута с типом задачи “Эпик”
+cfet.entity_type_id =
+(SELECT e.id
+FROM tasks.entity_types e WHERE e.code = 'epic'
+);
+При отсуствии необходимо добавить:
+№
+п/п
+Действие Запрос
+1 Добавление
+атрибута
+INSERT INTO tasks.custom_fields (code, type, name, descryption) VALUES
+('approvalId', 6, 'STRING', 'Согласование', 'Согласование');
+2 Добавление
+связи с
+типом
+задачи
+INSERT INTO tasks.custom_fields_entity_types
+(custom_field_id, entity_type_id, required, multiple_values, section_code,
+field_order, show_name, show_on_create)
+VALUES ((select id from tasks.custom_fields where code = 'approvalId'),
+(select id from tasks.entity_types where code = ' epic'), true, false, 'approval', 0,
+false, false);
+2.3.2. Настройка конфигурации карточки
+В раздел groups должен быть добавлен элемент с секцией approvals, содержащей полем approvalId.
+Добавлять рекомендуется после элемента с метками и компонентами:
+Добавляемый в groups элемент
+{
+"type": "main",
+"sections": [
+{
+"code": "approval",
+"name": "Согласование",
+"isCollapsable": false,
+"fields": [
+{
+"name": "Согласование",
+"order": 0,
+"type": "approval",
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+8
+Добавляемый в groups элемент
+"fieldCode": "approvalId",
+"isEditable": false,
+"isRequired": false,
+"reactions": [
+{
+"conditions": {
+"$.hasBeenCreated": false
+},
+"actions": [
+{
+"type": "hide"
+}
+]
+}
+]
+}
+]
+}
+]
+}
+В разделе header для поля status должны быть добавлены дополнительные ограничения (reactions):
+Дополнительные ограничения для status
+{
+"type": "status",
+"isSystem": true,
+"fieldCode": "status",
+"isRequired": false,
+"defaultValue": "created",
+"reactions": [
+{
+"conditions": {
+"$or": [
+{
+"$.hasBeenCreated": false
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+9
+Дополнительные ограничения для status
+},
+{
+"$.status.code": "sentForApproval"
+}
+]
+},
+"actions": [
+{
+"type": "disable"
+}
+]
+}
+]
+}
+2.3.3. Настройка статусной модели задачи
+Пример статусной модели для задачи с согласованием.
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+10
+Данные статусов (выделены статусы, которые должны присутствовать, чтобы был доступен
+механизм согласования):
+status_type_id code name localized_name
+1 created Created Создано
+2 inProgress In Progress В работе
+2 sentForApproval Sent For Approval Отправлено на согласование
+2 approved Approved Согласовано
+2 notApproved Not Approved Не согласовано
+2 approvalRevoked Approval Revoked Согласование отозвано
+3 done Done Выполнено
+3 closed Closed Закрыто
+Переходы статусной модели для сохранения в status
+_
+model.settings (выделены переходы, которые
+должны присутствовать, чтобы был доступен механизм согласования):
+Статусная модель в формате JSON
+{
+"initStatus": "created",
+"transitions": [
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+11
+Статусная модель в формате JSON
+{
+"source": "created",
+"target": "inProgress",
+"event": "created_inProgress"
+},
+{
+"source": "created",
+"target": "sentForApproval",
+"event": "created_sentForApproval"
+},
+{
+"source": "created",
+"target": "closed",
+"event": "created_closed"
+},
+{
+"source": "inProgress",
+"target": "created",
+"event": "inProgress_created"
+},
+{
+"source": "inProgress",
+"target": "sentForApproval",
+"event": "inProgress_sentForApproval"
+},
+{
+"source": "inProgress",
+"target": "closed",
+"event": "inProgress_closed"
+},
+{
+"source": "sentForApproval",
+"target": "approved",
+"event": "sentForApproval_approved"
+},
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+12
+Статусная модель в формате JSON
+{
+"source": "sentForApproval",
+"target": "notApproved",
+"event": "sentForApproval_notApproved"
+},
+{
+"source": "sentForApproval",
+"target": "approvalRevoked",
+"event": "sentForApproval_approvalRevoked"
+},
+{
+"source": "approved",
+"target": "done",
+"event": "approved_done"
+},
+{
+"source": "approvalRevoked",
+"target": "created",
+"event": "approvalRevoked_created"
+},
+{
+"source": "notApproved",
+"target": "created",
+"event": "notApproved_created"
+},
+{
+"source": "done",
+"target": "created",
+"event": "done_created"
+},
+{
+"source": "done",
+"target": "closed",
+"event": "done_closed"
+},
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+13
+Статусная модель в формате JSON
+{
+"source": "closed",
+"target": "created",
+"event": "closed_created"
+}
+]
+}
+Перед настройкой статусной модели необходимо добавить недостающие статусы.
+№
+п/п
+Действие Запрос
+1 Добавление
+статуса
+INSERT INTO tasks.entity_statuses (code, name, localized_name, status_type_id)
+VALUES ('sentForApproval', 'Sent For Approval', 'Отправлено на согласование',
+(select id from tasks.entity_status_types where category = 'ACTIVE'),);
+2 Настройка
+статусной
+модели
+do
+$$
+declare
+begin
+PERFORM tasks.create_status_model ('team_epic', 'Epic Status Model',
+'{JSON-конфигурация, описывающая статусную модель}');
+end;
+$$;
+2.4. Настройка сервиса sfera-tasks-tasks
+2.4.1. Переменные окружения
+Ниже приведен список переменных окружения, которые должны быть добавлены:
+Переменная окружения Значение по
+умолчанию
+Описание
+TASKS_APPROVALS_KAFKA_ENABLED false Признак
+включения/выключения
+интеграции с продуктом
+«Сфера: Согласования».
+• true – интеграция включена
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+14
+• false – интеграция
+выключена
+TASKS_APPROVALS_KAFKA_SECURITY-ENABLED false Признак применения проверок
+сертификатов.
+• true – применяются
+• false – не применяются
+SFERA_TASKS_TRUSTED_CERTIFICATES Путь к хранилищу доверенных
+сертификатов
+SFERA_TASKS_TRUSTED_CERTIFICATES_PASSW
+ORD
+Пароль для доступа к
+хранилищу доверенных
+сертификатов
+TASKS_KAFKA_SSL_TRUSTSTORE_TYPE PKCS12 Тип хранилища доверенных
+сертификатов
+SFERA_TASKS_KEY_CERTIFICATES Путь к хранилищу ключей
+SFERA_TASKS_KEY_CERTIFICATES_PASSWORD Пароль для доступа к
+хранилищу ключей
+TASKS_KAFKA_SSL_KEYSTORE_TYPE PKCS12 Тип хранилища ключей
+TASKS_APPROVALS_KAFKA_TOPIC Используемый топик Kafka
+продукта «Сфера:
+Согласования»
+TASKS_APPROVALS_KAFKA_GROUP_ID Группа, подписанная на топик
+Kafka продукта «Сфера:
+Согласования»
+TASKS_APPROVALS_KAFKA_USER_LOGIN Логин пользователя для
+доступа к Kafka продукта
+«Сфера: Согласования»
+TASKS_APPROVALS_KAFKA_SERVER Адрес сервера Kafka продукта
+«Сфера: Согласования»
+TASKS_KAFKA_SECURITY_PROTOCOL PLAINTEXT Протокол обращения к Kafka
+продукта «Сфера:
+Согласования»
+2.4.2. Конфигурация параметров интеграции
+Для функционирования интеграции используется конфигурация сервиса tasks-tasks, описанная в
+файле application.yaml и включенная в сборку, раздел sfera.tasks.approvals-kafka:
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+15
+Параметр Связанная переменная окружения
+enable TASKS_APPROVALS_KAFKA_ENABLE
+enable-security TASKS_APPROVALS_KAFKA_SECURITY-ENABLED
+trusted-store SFERA_TASKS_TRUSTED_CERTIFICATES
+trusted-store-
+password
+SFERA_TASKS_TRUSTED_CERTIFICATES_PASSWORD
+trusted-store-type TASKS_KAFKA_SSL_TRUSTSTORE_TYPE
+key-store SFERA_TASKS_KEY_CERTIFICATES
+key-store-password SFERA_TASKS_KEY_CERTIFICATES_PASSWORD
+key-store-type TASKS_KAFKA_SSL_KEYSTORE_TYPE
+topic TASKS_APPROVALS_KAFKA_TOPIC
+groupId TASKS_APPROVALS_KAFKA_GROUP_ID
+system-user-login TASKS_APPROVALS_KAFKA_USER_LOGIN
+bootstrap-server TASKS_APPROVALS_KAFKA_SERVER
+security-protocol-
+config
+TASKS_KAFKA_SECURITY_PROTOCOL
+В конфигурации рядом с переменными окружения через знак «:» могут быть указаны значения по
+умолчанию для конфигурируемых параметров.
+Пример конфигурации в файле application.yaml
+approvals-kafka:
+enable: ${TASKS_APPROVALS_KAFKA_ENABLED:true}
+enable-security: ${TASKS_APPROVALS_KAFKA_SECURITY-ENABLED:false}
+trusted-store: ${SFERA_TASKS_TRUSTED_CERTIFICATES:}
+trusted-store-password: ${SFERA_TASKS_TRUSTED_CERTIFICATES_PASSWORD:}
+trusted-store-type: ${TASKS_KAFKA_SSL_TRUSTSTORE_TYPE:PKCS12}
+key-store: ${SFERA_TASKS_KEY_CERTIFICATES:}
+key-store-password: ${SFERA_TASKS_KEY_CERTIFICATES_PASSWORD:}
+key-store-type: ${TASKS_KAFKA_SSL_KEYSTORE_TYPE:PKCS12}
+topic: ${TASKS_APPROVALS_KAFKA_TOPIC:localTopic}
+groupId: ${TASKS_APPROVALS_KAFKA_GROUP_ID:taskGroup}
+system-user-login: ${TASKS_APPROVALS_KAFKA_USER_LOGIN:system}
+bootstrap-server: ${TASKS_APPROVALS_KAFKA_SERVER:127.0.0.1:9092}
+security-protocol-config: ${TASKS_KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+Сфера: Задачи
+Руководство по настройке интеграции с продуктом «Сфера:
+Согласования»
+2023, Т1 Диджитал. Все права защищены.
+Конфиденциально. Несанкционированное распространение данного документа и любой его части запрещено.
+16
+История публикации документа
+Версия 1.0 от 29.09.2023
+Документ создан.
