@@ -6,3 +6,10 @@ chmod +x $HOME/minio-binaries/mc
 export PATH=$PATH:$HOME/minio-binaries/
 
 mc --help
+
+
+select dt, usr, count(*) from (
+select TO_CHAR(to_timestamp(event_time/1000),'yyyy-mm-dd') dt ,substring(user_id,40) usr  from event_entity ee 
+where "type" ='LOGIN' and user_id not like '%ci_dos_PPTS@t1.demo.ru' and user_id not like '%dvpr-read-demo@t1.demo.ru' and user_id not like '%dvpr-write-demo@t1.demo.ru') as logins
+group by dt, usr
+order by 1 desc
