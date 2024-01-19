@@ -1,0 +1,88 @@
+
+Общее
+Обновить версию оператора до 1.64.8-gpn-8
+
+Обновления Задач
+В файле ppts.yaml ззаменить образы сервисов на следующие:
+* sfera-tasks-web:2473-release-1.11.0
+* sfera-tasks-users:295-feature-ldapmask
+* sfera-tasks-tasks:2471-release-1.11
+* sfera-tasks-gateway:181-release-1.9
+* sfera-workflow:255-release-1.9.0
+* sfera-workflow-web:32-release-1.9
+* sfera-tasks-dictionaries:40-release-1.8
+
+В этом же файле добавить s3 блок (такой же как в  ppwi.yaml)
+
+Дополнительные переменные для users
+
+TASKS_SECURITY_AREA_ADMIN_ROLE_GROUPS: gpn2-leader-*
+TASKS_SECURITY_AREA_MEMBER_GROUPS: gpn2-developer-*,gpn2-leader-*
+TASKS_USERS_SCHEDULER_FIXED_DELAY: PT1M
+
+
+Перед обновлением задач необходимо удалить 2 триггера из базы tasks (tg_generate_approval_id_insert и tg_generate_approval_id_update), после запуска сервиса добавить их вручную:
+CREATE TRIGGER tg_generate_approval_id_insert
+    AFTER INSERT
+    ON entities
+    REFERENCING NEW TABLE as new_table
+for each statement
+EXECUTE PROCEDURE fn_generate_approval_uuid();
+
+CREATE TRIGGER tg_generate_approval_id_update
+    AFTER UPDATE
+    ON entities
+    REFERENCING NEW TABLE as new_table
+    for each statement
+EXECUTE PROCEDURE fn_generate_approval_uuid();
+
+
+Обновления Знаний
+Создать бакет ppwi-search
+
+В файле ppwi.yaml заменить образы сервисов на следующие:
+* sfera-wiki-access:174-release-1.12.0
+* sfera-wiki-file:168-release-1.12.0
+* sfera-wiki-front:1047-release-1.12.0
+* sfera-wiki-gateway-api:449-release-1.12.0
+* sfera-wiki-page:1071-release-1.12.0
+* sfera-wiki-space:272-feature-PPWI3469-sync-roles-with-ldap-groups
+* sfera-notifier:69-release-1.12.0
+* sfera-wiki-gateway-ws:199-release-1.12.0
+* sfera-local-audit-adapter:37-release-1.10.0
+
+Дополнильные переменные для space:
+LDAP_SCHEDULE_TIME: "0 */1 * * * *"
+LDAP_LOCK_AT_LEAST_FOR: 1m
+LDAP_LOCK_AT_MOST_FOR: 1m
+LDAP_USER_FILTER_TEMPLATE: "(&(objectClass=user)(objectCategory=Person)(memberOf=%MEMBER_OF%)(objectClass=organizationalPerson)(objectClass=person)(sn=*)(userPrincipalName=*)(mail=*))"
+SPACE_LDAP_GROUPS_0_GROUPPREFIX: gpn2-leader-%SPACE%
+SPACE_LDAP_GROUPS_0_ROLES: SPACE_EDITOR, SPACE_READER
+SPACE_LDAP_GROUPS_1_GROUPPREFIX: gpn2-developer-%SPACE%
+SPACE_LDAP_GROUPS_1_ROLES: SPACE_READER
+
+
+
+
+Обновления Пульса
+В файле ppmp.yaml заменить образы сервисов на следующие:
+* sfera-ppmp-service:76-develop
+* sfera-ppmp-web:70-main
+
+Обновления Канального приложения
+
+В файле ppch.yaml заменить образы сервисов на следующие:
+* sfera-auth-service:112-release-1.5.0
+* sfera-ui-core:360-release-1.6.0
+* sfera-tenant-management-service:238-release-1-6-0
+* sfera-profile:100-release-1.5.0
+* sfera-gateway-service:193-release-1.5.0
+* sfera-core-gateway-service:81-release-1.5.0
+* sfera-gateway-ws-service:24-release-1.5.0
+* sfera-common-widgets:150-release-1.6.0
+* sfera-gateway-mf-service:22-release-1.5.0
+
+
+
+Сергей Молохов, 
+Главный инженер DevOps
